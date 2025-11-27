@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Now - AI Recipe Provider</title>
+    <!-- Load Tailwind CSS for easy, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fafafa; /* Very light background to match UI */
+        }
+        .recipe-card {
+            /* Adds a nice, soft shadow to the main container */
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+            background-color: white;
+        }
+        /* Custom spinner for loading state */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #059669; /* Emerald Green accent */
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Input and Button Styling to match the screenshot look */
+        .input-container {
+            border: 2px solid #059669; /* Emerald Green border */
+            border-radius: 0.75rem; /* Rounded corners */
+        }
+        
+        /* Funny Animations for How It Works */
+        .wiggle { animation: wiggle 0.5s ease-in-out infinite; }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+        
+        .pop-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header / Navigation Bar -->
+    <header class="w-full bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <!-- Logo (Clickable to go Home) -->
+            <div id="homeLink" class="flex items-center space-x-2 cursor-pointer select-none group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span class="text-xl font-bold text-gray-900">RecipeNow</span>
+            </div>
+            
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex space-x-8 text-sm font-medium text-gray-600">
+                <a href="#" id="howItWorksLink" class="hover:text-emerald-600 transition duration-150">How It Works</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- VIEW 1: Main Content Area (Recipe Generator) -->
+    <main id="mainView" class="flex-grow flex flex-col items-center justify-start pt-16 pb-10 px-4 sm:px-6 lg:px-8 transition-opacity duration-300">
+        
+        <!-- Hero Section -->
+        <div class="text-center max-w-3xl mb-12">
+            <h1 class="text-5xl sm:text-7xl font-extrabold text-gray-900 leading-tight">
+                Turn your <span class="text-emerald-600">fridge</span> into a five-star feast.
+            </h1>
+            <p class="mt-6 text-xl text-gray-600 max-w-xl mx-auto">
+                Got some Aloo, leftover Rice, or Paneer? Input your ingredients, and let our Desi AI Chef craft personalized recipes for you.
+            </p>
+        </div>
+
+        <!-- Input and Recipe Card Container -->
+        <div class="w-full max-w-4xl">
+            <!-- Input and Ingredient Tagging Area -->
+            <div class="recipe-card p-6 sm:p-8 rounded-2xl mb-10">
+                
+                <!-- Ingredient Input Field -->
+                <div class="input-container flex items-center p-1">
+                    <input
+                        id="ingredientInput"
+                        type="text"
+                        placeholder="Add ingredients (e.g. Paneer, Capsicum, Rice, Besan)..."
+                        class="flex-grow p-3 text-lg border-none focus:ring-0 focus:outline-none placeholder-gray-400"
+                    >
+                    <button id="addIngredientButton" class="w-10 h-10 flex items-center justify-center text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition duration-150">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Ingredient Tags List -->
+                <div id="tagsContainer" class="mt-4 min-h-[50px] p-3 border-2 border-dashed border-gray-200 rounded-lg flex flex-wrap content-start gap-2">
+                    <p id="noIngredientsText" class="text-gray-400 italic text-sm">
+                        No ingredients added yet. Type above to start cooking!
+                    </p>
+                </div>
+
+                <!-- Find Recipes Button -->
+                <button
+                    id="generateButton"
+                    disabled
+                    class="mt-6 w-full flex items-center justify-center px-6 py-4 text-lg font-semibold rounded-lg text-white bg-gray-300 transition duration-300 disabled:opacity-50"
+                >
+                    <div id="loadingIndicator" class="hidden mr-3">
+                        <div class="spinner w-6 h-6 border-2"></div>
+                    </div>
+                    <span id="buttonText">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 15.5l-2.5-2.5m-3-3l-2.5-2.5M3 12a9 9 0 1118 0 9 9 0 01-18 0z" />
+                        </svg>
+                        Find Recipes
+                    </span>
+                </button>
+            </div>
+            
+            <!-- Recipe Output Section -->
+            <div id="recipeOutput" class="hidden space-y-8">
+                 <!-- Recipes will be injected here -->
+            </div>
+            
+            <!-- Source Display -->
+            <div id="sourceDisplay" class="w-full max-w-4xl mt-6 p-6 bg-white border border-gray-200 rounded-xl hidden">
+                <p class="text-sm font-medium text-gray-500 mb-2">Sources Referenced:</p>
+                <ul id="sourceList" class="text-sm space-y-1">
+                    <!-- Sources will be inserted here -->
+                </ul>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- VIEW 2: How It Works (Hidden by default) -->
+    <main id="howItWorksView" class="hidden flex-grow flex flex-col items-center justify-start pt-10 pb-10 px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-gray-900">Inside the Brain of <span class="text-emerald-600">ChefBot</span></h1>
+            <p class="mt-4 text-lg text-gray-600">A highly scientific simulation of what happens when you click the button.</p>
+        </div>
+
+        <!-- Interactive Story Card -->
+        <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl overflow-hidden border border-emerald-100">
+            <div class="p-8 sm:p-12 text-center" id="storyContainer">
+                <!-- Step 1 Content (Default) -->
+                <div class="story-step pop-in">
+                    <div class="text-6xl mb-6">🤨 🧊</div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Step 1: The Stare</h3>
+                    <p class="text-lg text-gray-600 mb-8">
+                        You open your fridge. You see a bowl of leftover Dal, some Curd (Dahi), and a lonely Shimla Mirch. 
+                        You stare at them. They stare back.
+                    </p>
+                    <button onclick="nextStoryStep(2)" class="px-8 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition transform hover:scale-105">
+                        Ask ChefBot for Help
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="bg-gray-100 h-2 w-full">
+                <div id="storyProgress" class="bg-emerald-500 h-full transition-all duration-500" style="width: 25%"></div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        // --------------------------------------------------------------------------------
+        // 1. Navigation & View Switching
+        // --------------------------------------------------------------------------------
+        const mainView = document.getElementById('mainView');
+        const howItWorksView = document.getElementById('howItWorksView');
+        const homeLink = document.getElementById('homeLink');
+        const howItWorksLink = document.getElementById('howItWorksLink');
+
+        function switchView(viewName) {
+            if (viewName === 'home') {
+                mainView.classList.remove('hidden');
+                howItWorksView.classList.add('hidden');
+                window.scrollTo(0, 0);
+            } else if (viewName === 'howItWorks') {
+                mainView.classList.add('hidden');
+                howItWorksView.classList.remove('hidden');
+                resetStory(); // Reset the story whenever they visit
+            }
+        }
+
+        homeLink.addEventListener('click', () => switchView('home'));
+        howItWorksLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchView('howItWorks');
+        });
+
+        // --------------------------------------------------------------------------------
+        // 2. Interactive Story Logic (Indian Context)
+        // --------------------------------------------------------------------------------
+        window.nextStoryStep = function(step) {
+            const container = document.getElementById('storyContainer');
+            const progress = document.getElementById('storyProgress');
+            let content = '';
+            let width = '25%';
+
+            if (step === 2) {
+                width = '50%';
+                content = `
+                    <div class="story-step pop-in">
+                        <div class="text-6xl mb-6 wiggle inline-block">🤖 ⚡</div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4">Step 2: The Search</h3>
+                        <p class="text-lg text-gray-600 mb-8">
+                            ChefBot wakes up. It scans 5,000 of your grandmother's secret recipes. 
+                            It briefly considers "Shimla Mirch Smoothie" but realizes that is a crime against humanity.
+                        </p>
+                        <button onclick="nextStoryStep(3)" class="px-8 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition transform hover:scale-105">
+                            Keep Thinking, Bot!
+                        </button>
+                    </div>
+                `;
+            } else if (step === 3) {
+                width = '75%';
+                content = `
+                    <div class="story-step pop-in">
+                        <div class="text-6xl mb-6">💡 ✨</div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4">Step 3: The Jugaad</h3>
+                        <p class="text-lg text-gray-600 mb-8">
+                            Aha! ChefBot applies some 'Jugaad'. It realizes the Dahi balances the spice of the leftover Dal. 
+                            It constructs a recipe for "Creamy Dal Tadka with Shimla Mirch Crunch".
+                        </p>
+                        <button onclick="nextStoryStep(4)" class="px-8 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition transform hover:scale-105">
+                            Serve It!
+                        </button>
+                    </div>
+                `;
+            } else if (step === 4) {
+                width = '100%';
+                content = `
+                    <div class="story-step pop-in">
+                        <div class="text-6xl mb-6">🍽️ 😋</div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-4">Step 4: The Daawat</h3>
+                        <p class="text-lg text-gray-600 mb-8">
+                            You cook. You eat. You are happy. 
+                            Your fridge is still empty, but your heart (and stomach) is full. That is the magic of RecipeNow.
+                        </p>
+                        <button id="tryItNowBtn" class="px-8 py-3 bg-gray-900 text-white font-bold rounded-lg hover:bg-gray-800 transition transform hover:scale-105">
+                            Try It Yourself
+                        </button>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = content;
+            progress.style.width = width;
+
+            // Re-attach event listener for the final button since onclick="" creates scope issues with modules sometimes
+            if (step === 4) {
+                document.getElementById('tryItNowBtn').addEventListener('click', () => switchView('home'));
+            }
+        };
+
+        function resetStory() {
+            // Reset to step 1
+            const container = document.getElementById('storyContainer');
+            const progress = document.getElementById('storyProgress');
+            progress.style.width = '25%';
+            container.innerHTML = `
+                <div class="story-step pop-in">
+                    <div class="text-6xl mb-6">🤨 🧊</div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Step 1: The Stare</h3>
+                    <p class="text-lg text-gray-600 mb-8">
+                        You open your fridge. You see a bowl of leftover Dal, some Curd (Dahi), and a lonely Shimla Mirch. 
+                        You stare at them. They stare back.
+                    </p>
+                    <button onclick="nextStoryStep(2)" class="px-8 py-3 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition transform hover:scale-105">
+                        Ask ChefBot for Help
+                    </button>
+                </div>
+            `;
+        }
+
+        // --------------------------------------------------------------------------------
+        // 3. Main App Variables
+        // --------------------------------------------------------------------------------
+        
+        // Element References
+        const generateButton = document.getElementById('generateButton');
+        const ingredientInput = document.getElementById('ingredientInput');
+        const addIngredientButton = document.getElementById('addIngredientButton');
+        const tagsContainer = document.getElementById('tagsContainer');
+        const noIngredientsText = document.getElementById('noIngredientsText');
+        const recipeOutput = document.getElementById('recipeOutput');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const buttonText = document.getElementById('buttonText');
+        const sourceDisplay = document.getElementById('sourceDisplay');
+        const sourceList = document.getElementById('sourceList');
+
+        // State Management for Ingredients
+        let ingredientsList = []; // Array to hold all the ingredient strings
+
+        // Configuration for the Gemini API
+        const modelName = 'gemini-2.5-flash-preview-09-2025';
+        const apiKey = "AIzaSyCiIdOCjnml7erl_NjqSoHjdj0zFsfNJCE";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+        // JSON Schema (Updated to support multiple recipes)
+        const responseSchema = {
+            type: "OBJECT",
+            properties: {
+                recipes: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            recipeName: { "type": "STRING", "description": "The creative name of the dish." },
+                            description: { "type": "STRING", "description": "A brief, appealing description of the dish." },
+                            calories: { "type": "NUMBER", "description": "Estimated calories per serving." },
+                            ingredients: {
+                                "type": "ARRAY",
+                                "items": { "type": "STRING" },
+                                "description": "A list of all ingredients with specific quantities."
+                            },
+                            instructions: {
+                                "type": "ARRAY",
+                                "items": { "type": "STRING" },
+                                "description": "Step-by-step cooking instructions."
+                            },
+                            prepTimeMinutes: { "type": "NUMBER", "description": "Estimated preparation time in minutes." },
+                            cookTimeMinutes: { "type": "NUMBER", "description": "Estimated cooking time in minutes." }
+                        },
+                        required: ["recipeName", "ingredients", "instructions", "calories"]
+                    }
+                }
+            }
+        };
+
+        // System Prompt (AI's instructions) - Requesting 2 recipes + Calories
+        const systemPrompt = "You are 'Recipe Now AI Chef,' a creative, professional, and resourceful culinary expert catering primarily to an Indian audience. Your task is to generate TWO DISTINCT, high-quality, and realistic recipes based on the provided ingredients. Prioritize Indian cuisine styles (North Indian, South Indian, Street Food, Desi-Chinese) or fusion dishes if appropriate. You can assume the user has a standard Indian pantry. Include an estimated Calorie Count per serving for each recipe. Output the response strictly in the specified JSON format.";
+
+        // --------------------------------------------------------------------------------
+        // 4. Ingredient Tagging Functions
+        // --------------------------------------------------------------------------------
+        
+        /**
+         * Renders the ingredientsList array into the tagsContainer UI.
+         */
+        function renderTags() {
+            tagsContainer.innerHTML = ''; // Clear existing tags
+
+            if (ingredientsList.length === 0) {
+                // Show the "No ingredients" text if the list is empty
+                tagsContainer.appendChild(noIngredientsText);
+                generateButton.disabled = true;
+                // Update button style to indicate disabled state
+                generateButton.classList.add('bg-gray-300', 'text-white', 'cursor-not-allowed');
+                generateButton.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+                buttonText.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 15.5l-2.5-2.5m-3-3l-2.5-2.5M3 12a9 9 0 1118 0 9 9 0 01-18 0z" />
+                    </svg>
+                    Find Recipes
+                `;
+                return;
+            }
+
+            // Update button to active state
+            generateButton.disabled = false;
+            generateButton.classList.remove('bg-gray-300', 'text-white', 'cursor-not-allowed');
+            generateButton.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'cursor-pointer');
+            
+            // Create a button/tag element for each ingredient
+            ingredientsList.forEach((ingredient, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'flex items-center bg-emerald-100 text-emerald-800 text-sm font-medium px-3 py-1 rounded-full whitespace-nowrap';
+                tag.innerHTML = `
+                    <span>${ingredient}</span>
+                    <button data-index="${index}" class="remove-tag-btn ml-2 text-emerald-600 hover:text-emerald-900 transition duration-150">
+                        &times;
+                    </button>
+                `;
+                tagsContainer.appendChild(tag);
+            });
+
+            // Re-attach listeners to the new removal buttons
+            document.querySelectorAll('.remove-tag-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.currentTarget.dataset.index, 10);
+                    removeIngredient(index);
+                });
+            });
+        }
+
+        /**
+         * Adds an ingredient from the input field to the list.
+         */
+        function addIngredient() {
+            let ingredient = ingredientInput.value.trim();
+            if (ingredient) {
+                // Capitalize the first letter for a cleaner look
+                ingredient = ingredient.charAt(0).toUpperCase() + ingredient.slice(1).toLowerCase();
+                if (!ingredientsList.includes(ingredient)) {
+                    ingredientsList.push(ingredient);
+                    renderTags();
+                }
+                ingredientInput.value = ''; // Clear the input field
+                ingredientInput.focus();
+            }
+        }
+
+        /**
+         * Removes an ingredient by its index in the list.
+         */
+        function removeIngredient(index) {
+            ingredientsList.splice(index, 1);
+            renderTags();
+        }
+
+        // Initial render for empty state
+        renderTags();
+
+        // --------------------------------------------------------------------------------
+        // 5. Core API Function (Talking to the AI)
+        // --------------------------------------------------------------------------------
+
+        class NonRetriableError extends Error {
+            constructor(message) {
+                super(message);
+                this.name = 'NonRetriableError';
+            }
+        }
+
+        /**
+         * Fetches a recipe from the Gemini API. Includes error handling and retries.
+         * @param {string} userQuery The ingredients provided by the user.
+         */
+        async function fetchRecipe(userQuery) {
+            const maxRetries = 5;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                        // REMOVED google_search tool to prevent 401 Permission Denied errors on restricted keys
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: responseSchema,
+                        },
+                    };
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            console.warn(`Rate limit hit. Retrying in ${delay / 1000}s...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        if (response.status === 401) {
+                             // Throw a special error that we won't retry
+                             throw new NonRetriableError('Invalid API Key. Please check your settings.');
+                        }
+                        throw new Error(`API request failed with status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    return result;
+
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    // If it's a 401 (NonRetriableError), stop immediately.
+                    if (error instanceof NonRetriableError) {
+                        throw error; 
+                    }
+                    // For other errors, check if we should retry
+                    if (attempt === maxRetries - 1) throw error;
+                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                    console.warn(`Attempt ${attempt + 1} failed. Retrying in ${delay / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --------------------------------------------------------------------------------
+        // 6. UI Rendering Function
+        // --------------------------------------------------------------------------------
+
+        /**
+         * Takes the structured recipe data and builds the HTML to display it.
+         */
+        function renderRecipe(data, sources) {
+            recipeOutput.classList.remove('hidden');
+            recipeOutput.innerHTML = ''; // Clear previous content
+
+            if (!data || !data.recipes || !Array.isArray(data.recipes)) {
+                recipeOutput.innerHTML = '<div class="w-full bg-white p-10 rounded-xl border border-red-100 text-center text-red-500">Could not parse the recipe data.</div>';
+                sourceDisplay.classList.add('hidden');
+                return;
+            }
+
+            // Loop through each recipe in the array
+            data.recipes.forEach((recipe, index) => {
+                const { recipeName, description, ingredients, instructions, prepTimeMinutes, cookTimeMinutes, calories } = recipe;
+
+                // 1. Create HTML for Prep, Cook Times, and Calories
+                const timeHTML = `
+                    <div class="flex flex-wrap gap-3 text-sm mb-6">
+                        ${calories ? `<div class="flex items-center px-3 py-1 bg-red-50 text-red-600 rounded-full font-medium border border-red-100"><span class="mr-1">🔥</span> ${calories} kcal</div>` : ''}
+                        ${prepTimeMinutes ? `<div class="flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium border border-emerald-100"><svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> Prep: ${prepTimeMinutes}m</div>` : ''}
+                        ${cookTimeMinutes ? `<div class="flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium border border-emerald-100"><svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 7 9h-3l-2-2m0 0v11.5m10 5.5l2-2m0 0h-3l2-2"></path></svg> Cook: ${cookTimeMinutes}m</div>` : ''}
+                    </div>
+                `;
+
+                // 2. Ingredients
+                const ingredientsHTML = `
+                    <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                        <span class="w-2 h-6 bg-emerald-500 rounded-sm mr-2"></span>
+                        Ingredients
+                    </h3>
+                    <ul class="list-disc list-inside space-y-2 mb-6 ml-1 text-gray-600">
+                        ${ingredients.map(item => `<li>${item}</li>`).join('')}
+                    </ul>
+                `;
+
+                // 3. Instructions
+                const instructionsHTML = `
+                    <h3 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
+                        <span class="w-2 h-6 bg-emerald-500 rounded-sm mr-2"></span>
+                        Instructions
+                    </h3>
+                    <ol class="list-decimal list-inside space-y-3 ml-1 text-gray-600">
+                        ${instructions.map(item => `<li class="pl-1">${item}</li>`).join('')}
+                    </ol>
+                `;
+
+                // 4. Construct Card HTML
+                const cardHTML = `
+                    <div class="bg-white border border-gray-200 rounded-xl p-6 sm:p-8 transition-all duration-300 hover:shadow-lg recipe-card relative overflow-hidden">
+                        <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-100 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
+                        
+                        <div class="relative z-10">
+                            <span class="text-xs font-bold tracking-wider text-emerald-600 uppercase mb-1 block">Recommendation #${index + 1}</span>
+                            <h2 class="text-3xl font-extrabold text-gray-900 mb-2">${recipeName}</h2>
+                            <p class="text-lg italic text-gray-500 mb-6 border-b border-gray-100 pb-4">${description || 'A delicious choice for your pantry.'}</p>
+                            ${timeHTML}
+                            <div class="grid md:grid-cols-2 gap-8">
+                                <div class="bg-gray-50 p-5 rounded-lg">${ingredientsHTML}</div>
+                                <div>${instructionsHTML}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                recipeOutput.innerHTML += cardHTML;
+            });
+
+            // 5. Render Sources (Citations)
+            if (sources && sources.length > 0) {
+                sourceList.innerHTML = sources.map(source => `
+                    <li>
+                        <a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-600 hover:underline">
+                            ${source.title || source.uri}
+                        </a>
+                    </li>
+                `).join('');
+                sourceDisplay.classList.remove('hidden'); // Show the source section
+            } else {
+                sourceDisplay.classList.add('hidden'); // Hide the source section
+            }
+        }
+
+        // --------------------------------------------------------------------------------
+        // 7. Event Listeners (User Interaction)
+        // --------------------------------------------------------------------------------
+
+        // Event listener for adding ingredients via the button
+        addIngredientButton.addEventListener('click', addIngredient);
+
+        // Event listener for adding ingredients via the Enter key
+        ingredientInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Prevent form submission if input was in a form
+                addIngredient();
+            }
+        });
+
+        /**
+         * Handles the button click to generate the recipe.
+         */
+        generateButton.addEventListener('click', async () => {
+            if (ingredientsList.length === 0) {
+                console.error('No ingredients added.');
+                return;
+            }
+
+            // UI State: Show Loading and Disable Button
+            generateButton.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+            buttonText.innerHTML = 'Crafting Recipes...'; // Update button text
+            
+            // Clear previous recipe and show loading message
+            recipeOutput.classList.remove('hidden');
+            recipeOutput.innerHTML = '<div class="w-full text-center py-12"><p class="text-xl text-emerald-600 font-medium animate-pulse">Scanning pantry... Mixing flavors... Calculating calories...</p></div>';
+            sourceDisplay.classList.add('hidden');
+
+            const ingredientsQuery = ingredientsList.join(', ');
+            const userQuery = `I have the following food items: ${ingredientsQuery}. Please generate TWO DISTINCT delicious and complete recipes using these items.`;
+
+            try {
+                const result = await fetchRecipe(userQuery);
+                const candidate = result.candidates?.[0];
+
+                if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                    throw new Error('No content returned from the AI.');
+                }
+                
+                // 1. Extract and Parse JSON
+                const jsonString = candidate.content.parts[0].text;
+                let recipeData;
+                try {
+                    recipeData = JSON.parse(jsonString);
+                } catch (e) {
+                    console.error('Failed to parse JSON string:', jsonString, e);
+                    throw new Error('The AI returned a non-parsable recipe format.');
+                }
+                
+                // 2. Extract sources/citations
+                let sources = [];
+                const groundingMetadata = candidate.groundingMetadata;
+                if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                    sources = groundingMetadata.groundingAttributions
+                        .map(attribution => ({
+                            uri: attribution.web?.uri,
+                            title: attribution.web?.title,
+                        }))
+                        .filter(source => source.uri && source.title);
+                }
+
+                // 3. Display the final recipe
+                renderRecipe(recipeData, sources);
+
+            } catch (error) {
+                console.error('Recipe Generation Failed:', error);
+                const errorMessage = error.message.includes('Invalid API Key') 
+                    ? 'Oops! It looks like the API key is missing or invalid.' 
+                    : 'An Error Occurred.';
+
+                recipeOutput.innerHTML = `
+                    <div class="bg-white rounded-xl border border-red-100 text-center p-10">
+                        <svg class="w-12 h-12 text-red-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p class="text-red-600 font-semibold">${errorMessage}</p>
+                        <p class="text-sm text-gray-500">Could not generate a recipe. Check the console for details or try again.</p>
+                    </div>
+                `;
+            } finally {
+                // UI State: Reset Button
+                generateButton.disabled = false; // Re-enabled by renderTags() if list is not empty
+                loadingIndicator.classList.add('hidden');
+                // The button text and state are correctly set by renderTags()
+                renderTags(); 
+            }
+        });
+    </script>
+</body>
+</html>
